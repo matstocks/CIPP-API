@@ -11,7 +11,7 @@ function Invoke-ExecMcp {
         is enforced for each tool exactly as it would be for a normal API request. This
         endpoint's own role (CIPP.Core.Read) is only the floor required to use MCP at all.
     .FUNCTIONALITY
-        Entrypoint
+        Entrypoint,AnyTenant
     .ROLE
         CIPP.Core.Read
     #>
@@ -24,6 +24,17 @@ function Invoke-ExecMcp {
                 StatusCode = [HttpStatusCode]::MethodNotAllowed
                 Headers    = @{ 'Content-Type' = 'application/json'; 'Allow' = 'POST' }
                 Body       = (@{ jsonrpc = '2.0'; id = $null; error = @{ code = -32600; message = 'Only HTTP POST (JSON mode) is supported.' } } | ConvertTo-Json -Compress)
+            })
+    }
+
+    $CallerAppId = $Request.Headers.'x-ms-client-principal-name'
+    $IsApiClient = $Request.Headers.'x-ms-client-principal-idp' -eq 'aad' -and $CallerAppId -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    $McpAllowed = if ($IsApiClient) { [bool](Get-CippApiClient -AppId $CallerAppId).MCPAllowed } else { $true }
+    if (-not $McpAllowed) {
+        return ([HttpResponseContext]@{
+                StatusCode = [HttpStatusCode]::Forbidden
+                Headers    = @{ 'Content-Type' = 'application/json' }
+                Body       = (@{ jsonrpc = '2.0'; id = $null; error = @{ code = -32001; message = 'This API client is not permitted to use the MCP server. Enable "MCP Access Allowed" on the API client in CIPP.' } } | ConvertTo-Json -Compress)
             })
     }
 
@@ -52,7 +63,7 @@ function Invoke-ExecMcp {
                 }
             }
             'ping' { $Result = @{} }
-            'tools/list' { $Result = [ordered]@{ tools = @(Get-CippMcpToolList) } }
+            'tools/list' { $Result = [ordered]@{ tools = @(Get-CippMcpToolList -Request $Request) } }
             'tools/call' {
                 $Result = Get-CippMcpToolResult -Request $Request -TriggerMetadata $TriggerMetadata -ToolName $Rpc.params.name -Arguments $Rpc.params.arguments
             }

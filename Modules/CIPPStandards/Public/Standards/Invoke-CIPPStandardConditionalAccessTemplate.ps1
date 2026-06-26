@@ -105,11 +105,17 @@ function Invoke-CIPPStandardConditionalAccessTemplate {
         $Filter = "PartitionKey eq 'CATemplate' and RowKey eq '$($Settings.TemplateList.value)'"
         $Policy = (Get-CippAzDataTableEntity @Table -Filter $Filter).JSON | ConvertFrom-Json -Depth 10
 
+        if ($null -eq $Policy) {
+            Write-LogMessage -API 'Standards' -tenant $Tenant -message "Conditional Access template '$($Settings.TemplateList.label)' ($($Settings.TemplateList.value)) could not be loaded from the template store - skipping." -Sev 'Error'
+            Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Settings.TemplateList.value)" -FieldValue "Template '$($Settings.TemplateList.label)' could not be loaded from the template store." -Tenant $Tenant
+            return
+        }
+
         # Override the template's state with the Drift Standard's state if specified
         # This ensures drift detection compares against the desired state, not the original template state
         if ($Settings.state -and $Settings.state -ne 'donotchange') {
             Write-Information "Overriding template state from '$($Policy.state)' to '$($Settings.state)' for drift comparison"
-            $Policy.state = $Settings.state
+            $Policy | Add-Member -NotePropertyName 'state' -NotePropertyValue $Settings.state -Force
         }
 
         $CheckExististing = $AllCAPolicies | Where-Object -Property displayName -EQ $Settings.TemplateList.label
@@ -141,7 +147,9 @@ function Invoke-CIPPStandardConditionalAccessTemplate {
                 return
             }
             if (!$Compare) {
-                Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Settings.TemplateList.value)" -FieldValue $true -Tenant $Tenant
+                $ExpectedValue = @{ 'Differences' = 'No Differences found' }
+                $CurrentValue = @{ 'Differences' = 'No Differences found' }
+                Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Settings.TemplateList.value)" -FieldValue $true -CurrentValue $CurrentValue -ExpectedValue $ExpectedValue -Tenant $Tenant
             } else {
                 #this can still be prettified but is for later.
                 $ExpectedValue = @{ 'Differences' = @() }
