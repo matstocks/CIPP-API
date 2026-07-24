@@ -50,7 +50,7 @@ function Invoke-CIPPStandardConditionalAccessTemplate {
 
     $TestResult = Test-CIPPStandardLicense -StandardName 'ConditionalAccessTemplate_general' -TenantFilter $Tenant -Preset Entra
     if ($TestResult -eq $false) {
-        Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Settings.TemplateList.value)" -FieldValue 'This tenant does not have the required license for this standard.' -Tenant $Tenant
+        Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Settings.TemplateList.value)" -FieldValue 'This tenant does not have the required license for this standard.' -LicenseAvailable $false -Tenant $Tenant
         return $true
     } #we're done.
 
@@ -77,7 +77,7 @@ function Invoke-CIPPStandardConditionalAccessTemplate {
                 $TestP2 = Test-CIPPStandardLicense -StandardName 'ConditionalAccessTemplate_p2' -TenantFilter $Tenant -Preset EntraP2 -SkipLog
                 if (!$TestP2) {
                     Write-Information "Skipping policy $($Policy.displayName) as it requires AAD Premium P2 license."
-                    Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Settings.TemplateList.value)" -CurrentValue @{ Differences = 'Policy requires an AAD Premium P2 license, which this tenant does not have.' } -ExpectedValue @{ Differences = @() } -Tenant $Tenant
+                    Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Settings.TemplateList.value)" -CurrentValue @{ Differences = 'Policy requires an AAD Premium P2 license, which this tenant does not have.' } -ExpectedValue @{ Differences = @() } -LicenseAvailable $false -Tenant $Tenant
                     return $true
                 }
             }
@@ -122,6 +122,15 @@ function Invoke-CIPPStandardConditionalAccessTemplate {
             $Policy | Add-Member -NotePropertyName 'state' -NotePropertyValue $Settings.state -Force
         }
 
+        if ($Policy.sessionControls) {
+            if ($Policy.sessionControls.disableResilienceDefaults -ne $true) {
+                $Policy.sessionControls.PSObject.Properties.Remove('disableResilienceDefaults')
+            }
+            if (@($Policy.sessionControls.PSObject.Properties).Count -eq 0) {
+                $Policy.PSObject.Properties.Remove('sessionControls')
+            }
+        }
+
         # Resolve the template's location GUIDs to display names so they compare like-for-like
         # with the deployed policy. The template's own LocationInfo carries the id->name map
         # (the GUID is the source tenant's id); fall back to this tenant's named-location cache.
@@ -152,7 +161,7 @@ function Invoke-CIPPStandardConditionalAccessTemplate {
             } elseif ($Policy.conditions.userRiskLevels.Count -gt 0 -or $Policy.conditions.signInRiskLevels.Count -gt 0) {
                 $TestP2 = Test-CIPPStandardLicense -StandardName 'ConditionalAccessTemplate_p2' -TenantFilter $Tenant -Preset EntraP2 -SkipLog
                 if (!$TestP2) {
-                    Set-CIPPStandardsCompareField -FieldName $FieldName -CurrentValue @{ Differences = 'Policy requires an AAD Premium P2 license, which this tenant does not have.' } -ExpectedValue @{ Differences = @() } -Tenant $Tenant
+                    Set-CIPPStandardsCompareField -FieldName $FieldName -CurrentValue @{ Differences = 'Policy requires an AAD Premium P2 license, which this tenant does not have.' } -ExpectedValue @{ Differences = @() } -LicenseAvailable $false -Tenant $Tenant
                 } else {
                     Set-CIPPStandardsCompareField -FieldName $FieldName -CurrentValue @{ Differences = 'Policy is missing from this tenant.' } -ExpectedValue @{ Differences = @() } -Tenant $Tenant
                 }

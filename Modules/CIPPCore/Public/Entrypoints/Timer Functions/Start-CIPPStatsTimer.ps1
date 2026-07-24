@@ -54,6 +54,11 @@ function Start-CIPPStatsTimer {
             $FeatureFlags[$_.Id] = $_.Enabled
         }
 
+        # SSO migration status
+        $MigrationTable = Get-CIPPTable -tablename 'SSOMigration'
+        $MigrationConfig = Get-CIPPAzDataTableEntity @MigrationTable -Filter "PartitionKey eq 'SSO' and RowKey eq 'MigrationConfig'" -ErrorAction SilentlyContinue
+        $MigrationStatus = $MigrationConfig.Status
+
         $SendingObject = [PSCustomObject]@{
             rgid                   = $env:WEBSITE_SITE_NAME
             SetupComplete          = $SetupComplete
@@ -85,8 +90,8 @@ function Start-CIPPStatsTimer {
             GitHub                 = $RawExt.GitHub.Enabled
             BestPracticeAnalyser   = $FeatureFlags.BestPracticeAnalyser
             SuperAdminNG           = $FeatureFlags.SuperAdminNG
-            CopilotAI              = $FeatureFlags.CopilotAI
             MCPServer              = $FeatureFlags.MCPServer
+            SSOMigrationStatus     = $MigrationStatus
         } | ConvertTo-Json
 
         try {

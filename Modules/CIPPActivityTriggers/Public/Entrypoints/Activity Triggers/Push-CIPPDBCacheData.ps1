@@ -198,7 +198,7 @@ function Push-CIPPDBCacheData {
         } else {
             Write-Host "Skipping Compliance data collection for $TenantFilter - no required license"
         }
-        
+
         if ($DefenderCapable) {
             $Tasks.Add(@{
                     FunctionName   = 'ExecCIPPDBCache'
@@ -219,6 +219,7 @@ function Push-CIPPDBCacheData {
                     QueueId        = $QueueId
                     QueueName      = "DB Cache SharePoint - $TenantFilter"
                 })
+            # SharePointSharingLinks runs adhoc since it can take a long time to enumerate all sharing links for large tenants
         } else {
             Write-Host "Skipping SharePoint data collection for $TenantFilter - no required license"
         }
