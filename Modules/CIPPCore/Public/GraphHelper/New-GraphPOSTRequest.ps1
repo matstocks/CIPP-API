@@ -19,6 +19,7 @@ function New-GraphPOSTRequest {
         $returnHeaders = $false,
         $maxRetries = 3,
         $ScheduleRetry = $false,
+        [switch]$UseCertificate,
         $headers
     )
 
@@ -26,7 +27,9 @@ function New-GraphPOSTRequest {
         if ($Headers) {
             $Headers = $Headers
         } else {
-            $Headers = Get-GraphToken -tenantid $tenantid -scope $scope -AsApp $asapp -SkipCache $skipTokenCache
+            # -UseCertificate authenticates the app with the SAM certificate instead of the
+            # client secret: delegated (refresh token) by default, app-only with -AsApp $true
+            $Headers = Get-GraphToken -tenantid $tenantid -scope $scope -AsApp $asapp -SkipCache $skipTokenCache -UseCertificate:$UseCertificate
         }
         if ($AddedHeaders) {
             foreach ($header in $AddedHeaders.GetEnumerator()) {
@@ -75,8 +78,9 @@ function New-GraphPOSTRequest {
                     }
                     $ShouldRetry = $true
                 }
-                # Check for "Resource temporarily unavailable"
-                elseif ($Message -like '*Resource temporarily unavailable*' -or $Message -like '*Too many requests*') {
+                # Check for "Resource temporarily unavailable" / SharePoint CSOM throttling
+                # ("Server busy, please retry" is transient and safe to retry, e.g. ListSiteProperties).
+                elseif ($Message -like '*Resource temporarily unavailable*' -or $Message -like '*Too many requests*' -or $Message -like '*Server busy*') {
                     $WaitTime = Get-Random -Minimum 1.1 -Maximum 3.1
                     $RetryReason = 'Resource temporarily unavailable.'
                     $ShouldRetry = $true
@@ -118,6 +122,7 @@ function New-GraphPOSTRequest {
                 if ($IgnoreErrors) { $RetryParameters.IgnoreErrors = $IgnoreErrors }
                 if ($returnHeaders) { $RetryParameters.ReturnHeaders = $returnHeaders }
                 if ($maxRetries) { $RetryParameters.maxRetries = $maxRetries }
+                if ($UseCertificate) { $RetryParameters.UseCertificate = $true }
 
                 # Create the scheduled task object
                 $TaskObject = [PSCustomObject]@{
@@ -155,6 +160,6 @@ function New-GraphPOSTRequest {
             return $ReturnedData
         }
     } else {
-        Write-Error 'Not allowed. You cannot manage your own tenant or tenants not under your scope'
+        Write-Error (Get-AuthorisedRequestError -TenantID $tenantid -Context 'Graph request')
     }
 }
